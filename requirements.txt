@@ -9,3 +9,5 @@ pandas-datareader==0.10.0
 pandas_ta==0.3.14b0
 disutils==1.4.32.post2
 setuptools==78.1.0
+scikit-learn==1.7.0
+pyltr==0.2.6
