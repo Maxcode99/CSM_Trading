@@ -1,41 +1,27 @@
-# from preprocessing.preprocess import Preprocess
-# from models.structure import Structure
-
-
-import pickle
-import os
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import yfinance as yf
-import pyltr
-
-
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, confusion_matrix
-from sklearn.naive_bayes import GaussianNB
-from sklearn.metrics import roc_curve, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay, RocCurveDisplay
-from sklearn.metrics import roc_curve, auc
+from CSM_Trading.preprocessing.model_prep import StockInfo
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_validate
-from sklearn.model_selection import RandomizedSearchCV
+
+
+import pandas as pd
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, confusion_matrix
+import warnings
+warnings.filterwarnings('ignore')
+
+
 
 
 
 class Model_1():
+    def __init__(self):
 
+        stocks_info = StockInfo()
+        self.stock_df = stocks_info.get_stocks()
+        self.X = self.stock_df.drop(columns= "relevance")
+        self.y = self.stock_df["relevance"]
 
-
-    def __init__(self, route: str):
-
-
-        self.stock_df = pd.read_csv(route)
-        self.stock_df.set_index("Date", inplace=True)
-
-
-        # df_predict = self.stock_df.loc[:, ["Close"]].shift(15)
-
-
-
-
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+            self.X, self.y, test_size=0.2, random_state=42
+        )
 
 
 
@@ -48,7 +34,7 @@ pd.set_option('display.max_rows', 20)
 
 
 if __name__ == "__main__":
-    route = "../data/closing_prices_snp500.csv"
-    model_1 = Model_1(route)
+    # route = "../data/closing_prices_snp500.csv"
+
+    model_1 = Model_1()
     print(model_1.stock_df)
-    print(model_1.stock_df.index)
