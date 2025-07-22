@@ -4,7 +4,33 @@ import yfinance as yf
 
 class StockInfo():
 
-    def __init__(self):
+
+
+    def __init__(self, start_period: int, end_period: int):
+
+        """
+        start_period : int
+
+        Need to be in multiples of 1
+        Example:
+            1,2,3,4....
+
+        When every number is going to be a year in the past
+
+        end_period : int
+
+        Need to be in multiples of 1
+
+                Example:
+            1,2,3,4....
+
+        When every number is going to be a year in the past
+
+        """
+
+        if start_period < end_period:
+            raise ValueError("Start period need to have a higher number")
+
 
         sp500 = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
 
@@ -12,9 +38,8 @@ class StockInfo():
 
         symbols_list = sp500['Symbol'].unique().tolist()
 
-        end_date = '2023-09-27'
-
-        start_date = pd.to_datetime(end_date) - pd.DateOffset(365 * 8)
+        end_date = pd.Timestamp.today().normalize() - pd.Timedelta(days=(365 * end_period))
+        start_date = end_date - pd.DateOffset(days=(365 * start_period))
 
         self.df = yf.download(tickers=symbols_list,
                               start=start_date,
@@ -23,7 +48,7 @@ class StockInfo():
         self.df.index.names = ['date', 'ticker']
 
         self.df.columns = self.df.columns.str.lower()
-        self.df = self.df.drop(columns=["adj close"])
+        # self.df = self.df.drop(columns=["adj close"])
 
 
     def _calculate_returns(self, dataframe: pd.DataFrame,  period_to_predict: int = 10) -> pd.DataFrame:
@@ -60,12 +85,14 @@ class StockInfo():
         def map_relevance(group):
             if group <= 0:
                 return 0
-            elif 0 < group < 0.05:
+            elif 0 < group < 0.007:
                 return 1
             else:
                 return 2
 
         stock_df['relevance'] = stock_df['future_return'].apply(map_relevance)  # ← fixed
+
+
 
         return stock_df
 
@@ -84,7 +111,7 @@ pd.set_option('display.max_rows', 20)
 
 if __name__ == "__main__":
 
-    stock_info = StockInfo()
+    stock_info = StockInfo(end_period= 1, start_period=2)
     info = stock_info.get_stocks()
     print(info)
 
