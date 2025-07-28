@@ -6,31 +6,25 @@ class StockInfo():
 
 
 
-    def __init__(self, start_period: int, end_period: int):
+    def __init__(self, start_period: str, end_period: str):
 
         """
-        start_period : int
+        start_period : str
 
-        Need to be in multiples of 1
-        Example:
-            1,2,3,4....
+         Need to be in str american datetime format
 
-        When every number is going to be a year in the past
+            Example:
+                "2020-01-01", 2021-01-01
 
-        end_period : int
+        end_period : str
 
-        Need to be in multiples of 1
+        Need to be in str american datetime format
 
-                Example:
-            1,2,3,4....
+            Example:
+                "2020-01-01", 2021-01-01
 
-        When every number is going to be a year in the past
 
         """
-
-        if start_period < end_period:
-            raise ValueError("Start period need to have a higher number")
-
 
         sp500 = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
 
@@ -38,12 +32,9 @@ class StockInfo():
 
         symbols_list = sp500['Symbol'].unique().tolist()
 
-        end_date = pd.Timestamp.today().normalize() - pd.Timedelta(days=(365 * end_period))
-        start_date = end_date - pd.DateOffset(days=(365 * start_period))
-
         self.df = yf.download(tickers=symbols_list,
-                              start=start_date,
-                              end=end_date).stack()
+                              start=start_period,
+                              end=end_period)[["Close", "Volume"]].stack()
 
         self.df.index.names = ['date', 'ticker']
 
@@ -54,7 +45,7 @@ class StockInfo():
     def _calculate_returns(self, dataframe: pd.DataFrame,  period_to_predict: int = 10) -> pd.DataFrame:
 
         outlier_cutoff = 0.005
-        lags = [1, 2, 3, 4, 5]
+        lags = [1, 2, 3, 4, 5, 6, 7]
 
         for lag in lags:
             dataframe[f'return_{lag}day'] = (dataframe['close']
@@ -78,7 +69,8 @@ class StockInfo():
 
     def get_stocks(self) -> pd.DataFrame:
         stock_df = self.df.groupby(level=1, group_keys=False).apply(self._calculate_returns).dropna()
-        stock_df = stock_df.drop(columns=["high", "low", "open", "volume", "close"])
+        # stock_df = stock_df.drop(columns=["high", "low", "open", "volume", "close"])
+        stock_df = stock_df.drop(columns=["volume", "close"])
         stock_df["qid"] = stock_df.index.get_level_values(0)
         stock_df["qid"] = pd.factorize(stock_df['qid'])[0]
 
@@ -97,6 +89,11 @@ class StockInfo():
         return stock_df
 
 
+    def saved_data(self, dataframe: pd.DataFrame, route: str) -> None:
+
+        saved_stocks = dataframe
+        saved_stocks.to_csv(route)
+
 
 
 
@@ -111,9 +108,17 @@ pd.set_option('display.max_rows', 20)
 
 if __name__ == "__main__":
 
-    stock_info = StockInfo(end_period= 1, start_period=2)
-    info = stock_info.get_stocks()
-    print(info)
+    # stock_info = StockInfo(start_period="2020-01-01", end_period="2024-01-01")
+    stock_info2 = StockInfo(start_period="2024-01-02", end_period="2024-01-20")
+
+    # info = stock_info.get_stocks()
+    info2 = stock_info2.get_stocks()
+    # stock_info.saved_data(info, route="../data/train_data/TrainData_2024_01_01.csv")
+    stock_info2.saved_data(info2, route="../data/test_data/TestData_2024_01_10.csv")
+
+    # print(info)
+    print(info2)
+
 
 
 
