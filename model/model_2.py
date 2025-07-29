@@ -247,17 +247,26 @@ pd.set_option('display.max_rows', 20)
 
 
 if __name__ == "__main__":
-    # Initialize model object and print raw stock dataset
     model = Model_1()
     print("📈 Full stock dataset:")
-    print(model.stock_df)
+    print(model.stock_df_train)
 
     # Train or load model and get predictions on test set
-    trained_model, top_assets, train_r2, test_r2 = model.get_model()
+    # trained_model, top_assets, train_r2, test_r2 = model.get_model()
 
-    print("\n🏆 Top Ranked Assets on Test Set:")
-    print(top_assets.head(10))  # show top 10 rows for preview
+    # print("\n🏆 Top Ranked Assets on Test Set:")
+    # print(top_assets.head(10))  # show top 10 rows for preview
+
 
     # Evaluate performance
-    model.performance(trained_model)
+    # model.performance(trained_model)
+
+    # Best Model
+    best_model, best_top_assets = model.get_hyperparameter()
+
+    print("\n🏆 Top Ranked Assets on Test Set:")
+    print(best_top_assets.head(10))  # show top 10 rows for preview
+
+    # Evaluate performance best parameters
+    model.performance(best_model)
 
