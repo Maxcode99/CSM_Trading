@@ -13,7 +13,7 @@ from CSM_Trading.preprocessing.model_prep import StockInfo
 
 warnings.filterwarnings('ignore')
 
-class Model_1():
+class Model_GBR():
 
 
     def __init__(self):
@@ -33,6 +33,8 @@ class Model_1():
         self.qid_test = self.stock_df_test["qid"]
         self.ticker_test = self.stock_df_test.index.get_level_values("ticker")
 
+
+
     def get_model(self, save_path="../saved_models/xgbregressor.pkl"):
         """
         Trains or loads a GradientBoostingRegressor model, evaluates it, and returns predictions on the test set.
@@ -40,7 +42,7 @@ class Model_1():
         Parameters
         ----------
         save_path : str
-            Path to save/load the model.
+            Path to save/load the model and related results.
 
         Returns
         -------
@@ -57,8 +59,13 @@ class Model_1():
 
         if os.path.exists(model_path):
             with open(model_path, "rb") as file:
-                model = pickle.load(file)
-            print("✅ Model loaded successfully!")
+                model_data = pickle.load(file)
+
+            model = model_data["model"]
+            train_scores = model_data["train_scores"]
+            test_scores = model_data["test_scores"]
+            print("✅ Model and metrics loaded successfully!")
+
         else:
             model = GradientBoostingRegressor(
                 n_estimators=100,
@@ -66,7 +73,7 @@ class Model_1():
                 random_state=42
             )
 
-            # Use training data for CV
+            # Cross-validation
             cv = KFold(n_splits=5, shuffle=True, random_state=42)
             cv_results = cross_validate(
                 model,
@@ -83,40 +90,47 @@ class Model_1():
             print(f"📊 CV Train R²: {train_scores:.4f}")
             print(f"📊 CV Test  R²: {test_scores:.4f}")
 
-            # Fit final model
+
             model.fit(self.X_train, self.y_train)
 
-            # Save model
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            with open(model_path, "wb") as file:
-                pickle.dump(model, file)
-            print(f"💾 Model saved at {model_path}!")
 
-        # Use test set for predictions and ranking
         self.stock_df_test["predicted_return"] = model.predict(self.X_test)
         self.stock_df_test["qid"] = self.qid_test.values
         self.stock_df_test["ticker"] = self.ticker_test.values
-
         self.stock_df_test["rank"] = self.stock_df_test.groupby("qid")["predicted_return"].rank(ascending=False)
         top_assets = self.stock_df_test[self.stock_df_test["rank"] <= 5]
 
+
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(model_path, "wb") as file:
+            pickle.dump({
+                "model": model,
+                "train_scores": train_scores,
+                "test_scores": test_scores,
+                "top_assets": top_assets,
+                "test_predictions": self.stock_df_test
+            }, file)
+
+        print(f"💾 Model and results saved at {model_path}!")
+
         return model, top_assets, train_scores, test_scores
+
+
 
     def get_hyperparameter(self, save_path="../saved_models/gbregressor_best_model.pkl"):
         """
         Tunes the hyperparameters of a GradientBoostingRegressor using RandomizedSearchCV,
-        saves the best model, and returns it along with the top ranked assets on the test set.
+        saves the best model and results, and returns the model with top ranked assets.
 
         Parameters
         ----------
         save_path : str, optional
-            The file path where the best model will be saved.
+            The file path where the best model and results will be saved.
 
         Returns
         -------
         best_model : GradientBoostingRegressor
-            The regressor with the best hyperparameters obtained from RandomizedSearchCV.
-
+            The regressor with the best hyperparameters.
         top_assets : pd.DataFrame
             Top 5 ranked assets by predicted return for each qid in the test set.
         """
@@ -137,7 +151,7 @@ class Model_1():
             estimator=gbr,
             param_distributions=param_distributions,
             n_iter=50,
-            scoring='neg_mean_squared_error',  # Can change to 'r2' if preferred
+            scoring='neg_mean_squared_error',
             cv=5,
             random_state=42,
             n_jobs=-1
@@ -146,24 +160,35 @@ class Model_1():
         random_search.fit(self.X_train, self.y_train)
 
         best_model = random_search.best_estimator_
+        best_params = random_search.best_params_
+        best_score = random_search.best_score_
 
-        print("✅ Best Parameters:", random_search.best_params_)
-        print(f"📉 Best Score (Negative MSE): {random_search.best_score_:.4f}")
+        print("✅ Best Parameters:", best_params)
+        print(f"📉 Best Score (Negative MSE): {best_score:.4f}")
 
-        # Save model
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "wb") as file:
-            pickle.dump(best_model, file)
-        print(f"💾 Best model saved at {save_path}!")
 
-        # Predict on test set
         self.stock_df_test["predicted_return"] = best_model.predict(self.X_test)
         self.stock_df_test["qid"] = self.qid_test.values
         self.stock_df_test["ticker"] = self.ticker_test.values
 
-        # Rank by predicted return
+
         self.stock_df_test["rank"] = self.stock_df_test.groupby("qid")["predicted_return"].rank(ascending=False)
         top_assets = self.stock_df_test[self.stock_df_test["rank"] <= 5]
+
+
+        results = {
+            "model": best_model,
+            "best_params": best_params,
+            "best_score": best_score,
+            "top_assets": top_assets,
+            "test_predictions": self.stock_df_test
+        }
+
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "wb") as f:
+            pickle.dump(results, f)
+
+        print(f"💾 All results saved to {save_path}!")
 
         return best_model, top_assets
 
@@ -183,21 +208,21 @@ class Model_1():
             The model and a dictionary with performance metrics.
         """
 
-        # Ensure we extract the model if passed as (model, top_assets, ...)
+
         if model is None:
             model = self.get_model()[0]
         elif isinstance(model, tuple):
             model = model[0]
 
-        # Predict on the test set
+
         preds = model.predict(self.X_test)
 
-        # Metrics
+
         r2 = r2_score(self.y_test, preds)
         mse = mean_squared_error(self.y_test, preds)
         rmse = np.sqrt(mse)
 
-        # Output summary
+
         print("\n📦 Model Summary:")
         print(model)
 
@@ -206,7 +231,7 @@ class Model_1():
         print(f"MSE      : {mse:.4f}")
         print(f"RMSE     : {rmse:.4f}")
 
-        # Plot predicted vs actual
+
         plt.figure(figsize=(8, 6))
         plt.scatter(self.y_test, preds, alpha=0.3, label="Predictions")
         plt.plot([self.y_test.min(), self.y_test.max()],
@@ -236,7 +261,7 @@ class Model_1():
         np.ndarray
             Predicted values for the input data.
         """
-        model = self.get_model()[0]  # Extract the model from (model, top_assets, ...)
+        model = self.get_model()[0]
         prediction = model.predict(data)
         return prediction
 
@@ -247,26 +272,26 @@ pd.set_option('display.max_rows', 20)
 
 
 if __name__ == "__main__":
-    model = Model_1()
+    model = Model_GBR()
     print("📈 Full stock dataset:")
     print(model.stock_df_train)
 
-    # Train or load model and get predictions on test set
-    # trained_model, top_assets, train_r2, test_r2 = model.get_model()
 
-    # print("\n🏆 Top Ranked Assets on Test Set:")
-    # print(top_assets.head(10))  # show top 10 rows for preview
-
-
-    # Evaluate performance
-    # model.performance(trained_model)
-
-    # Best Model
-    best_model, best_top_assets = model.get_hyperparameter()
+    trained_model, top_assets, train_r2, test_r2 = model.get_model()
 
     print("\n🏆 Top Ranked Assets on Test Set:")
-    print(best_top_assets.head(10))  # show top 10 rows for preview
+    print(top_assets.head(10))
 
-    # Evaluate performance best parameters
-    model.performance(best_model)
+
+
+    model.performance(trained_model)
+
+
+    # best_model, best_top_assets = model.get_hyperparameter()
+    #
+    # print("\n🏆 Top Ranked Assets on Test Set:")
+    # print(best_top_assets.head(10))  # show top 10 rows for preview
+    #
+
+    # model.performance(best_model)
 
